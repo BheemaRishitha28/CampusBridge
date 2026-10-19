@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
-import { facultyProfile, initialStudents } from "../../lib/mockData";
+import { adminProfile, facultyProfile, initialStudents } from "../../lib/mockData";
 import { Profile } from "../../types/domain";
 
 interface SignInModalProps {
@@ -120,9 +120,8 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, defau
           email,
           password,
         });
-        if (signInErr) throw signInErr;
 
-        if (data.user) {
+        if (!signInErr && data?.user) {
           const { data: profileData, error: profErr } = await supabase
             .from("profiles")
             .select("*")
@@ -154,11 +153,40 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, defau
           onClose();
           return;
         }
+
+        // Check if credentials match the configured demo accounts
+        const isFacultyDemo =
+          (selectedRole === "faculty" || !selectedRole) &&
+          (email.toLowerCase() === facultyProfile.university_email.toLowerCase() ||
+           email.toLowerCase() === adminProfile.university_email.toLowerCase() ||
+           email.toLowerCase() === "admin@campusbridge.edu") &&
+          password === "DemoAdmin2026!";
+
+        const isStudentDemo =
+          (selectedRole === "student" || !selectedRole) &&
+          (email.toLowerCase() === "student.a@campusbridge.edu" ||
+           initialStudents.some((s) => s.university_email.toLowerCase() === email.toLowerCase())) &&
+          password === "DemoStudent2026!";
+
+        if (isFacultyDemo) {
+          loginAs(email.toLowerCase() === "admin@campusbridge.edu" ? adminProfile : facultyProfile);
+          onClose();
+          return;
+        }
+
+        if (isStudentDemo) {
+          const matched = initialStudents.find((s) => s.university_email.toLowerCase() === email.toLowerCase());
+          loginAs(matched || initialStudents[0]);
+          onClose();
+          return;
+        }
+
+        if (signInErr) throw signInErr;
       }
 
-      // Offline / Demo Authentication Fallback
+      // Offline / Demo Authentication Fallback (when Supabase is not configured)
       if (selectedRole === "faculty") {
-        loginAs(facultyProfile);
+        loginAs(email.toLowerCase() === "admin@campusbridge.edu" ? adminProfile : facultyProfile);
       } else {
         const matched = initialStudents.find((s) => s.university_email.toLowerCase() === email.toLowerCase());
         loginAs(matched || initialStudents[0]);
